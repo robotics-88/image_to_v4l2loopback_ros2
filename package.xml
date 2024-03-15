@@ -22,6 +22,6 @@
   <test_depend>ament_lint_common</test_depend> <!-- Optional, common linters -->
   
   <export>
-    <!-- ROS2 doesn't require an empty export tag, but you might add custom interfaces or plugins here -->
+    <build_type>ament_cmake</build_type> 
   </export>
 </package>
