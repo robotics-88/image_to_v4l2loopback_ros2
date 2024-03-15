@@ -25,7 +25,7 @@ def generate_launch_description():
 
     # Define the node action
     stream_node = Node(
-        package='image_to_v4l2loopback_ros2',  # Your package name
+        package='image_to_v4l2loopback',  # Your package name
         executable='stream',  # Name of the executable created by stream.cpp
         name='image_stream_node',
         output='screen',
