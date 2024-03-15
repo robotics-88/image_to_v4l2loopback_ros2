@@ -5,32 +5,32 @@
 
 #include <fcntl.h>
 #include <image_to_v4l2loopback/video_device.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <stdexcept>
 #include <string.h>
 #include <string>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-VideoDevice::VideoDevice(const std::string &path) : fd_(-1) {
+VideoDevice::VideoDevice(const std::string &path, const rclcpp::Logger &logger) : fd_(-1), logger_(logger) {
   fd_ = open(path.c_str(), O_RDWR);
   if (fd_ == -1) {
     std::stringstream ss;
     ss << "open('" << path << "') failed - errno=" << errno << " ('"
        << strerror(errno) << "')";
-    ROS_ERROR_STREAM(ss.str());
+    RCLCPP_ERROR_STREAM(logger_, ss.str());
     throw std::runtime_error(ss.str());
   }
-  ROS_INFO_STREAM("opened " << path << " with descriptor: " << fd_);
+  RCLCPP_ERROR_STREAM(logger_, "opened " << path << " with descriptor: " << fd_);
 }
 
-VideoDevice::VideoDevice(const VideoDevice &other) : fd_(-1) {
+VideoDevice::VideoDevice(const VideoDevice &other) : fd_(-1), logger_(other.logger_) {
   fd_ = dup(other.fd_);
   if (fd_ == -1) {
     std::stringstream ss;
     ss << "dup('" << other.fd_ << "') failed - errno=" << errno << " ('"
        << strerror(errno) << "')";
-    ROS_ERROR_STREAM(ss.str());
+    RCLCPP_ERROR_STREAM(logger_, ss.str());
     throw std::runtime_error(ss.str());
   }
 }
@@ -44,7 +44,7 @@ int VideoDevice::stream_on() {
   int type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   int rc = ioctl(fd_, VIDIOC_STREAMON, &type);
   if (rc == -1) {
-    ROS_ERROR("ioctl(%d, VIDIOC_STREAMON) failed - errno=%d, %s", fd_, errno,
+    RCLCPP_ERROR(logger_, "ioctl(%d, VIDIOC_STREAMON) failed - errno=%d, %s", fd_, errno,
               strerror(errno));
   }
   return rc;
@@ -54,7 +54,7 @@ int VideoDevice::stream_off() {
   int type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   int rc = ioctl(fd_, VIDIOC_STREAMOFF, &type);
   if (rc == -1) {
-    ROS_ERROR("ioctl(%d, VIDIOC_STREAMOFF) failed - errno=%d, %s", fd_, errno,
+    RCLCPP_ERROR(logger_, "ioctl(%d, VIDIOC_STREAMOFF) failed - errno=%d, %s", fd_, errno,
               strerror(errno));
   }
   return rc;
@@ -63,7 +63,7 @@ int VideoDevice::stream_off() {
 int VideoDevice::capabilities(v4l2_capability &capability) {
   int rc = ioctl(fd_, VIDIOC_QUERYCAP, &capability);
   if (rc == -1) {
-    ROS_ERROR("ioctl(%d, VIDIOC_QUERYCAP) failed - errno=%d, %s", fd_, errno,
+    RCLCPP_ERROR(logger_, "ioctl(%d, VIDIOC_QUERYCAP) failed - errno=%d, %s", fd_, errno,
               strerror(errno));
   }
   return rc;
@@ -72,9 +72,9 @@ int VideoDevice::capabilities(v4l2_capability &capability) {
 int VideoDevice::get_format(v4l2_format &format) {
   int rc = ioctl(fd_, VIDIOC_G_FMT, &format);
   if (rc == -1) {
-    ROS_ERROR("ioctl(%d, VIDIOC_G_FMT) failed - errno=%d, %s", fd_, errno,
+    RCLCPP_ERROR(logger_, "ioctl(%d, VIDIOC_G_FMT) failed - errno=%d, %s", fd_, errno,
               strerror(errno));
-    // ROS_ERROR_STREAM(format);
+    // RCLCPP_ERROR(logger_, format);
   } else {
     log_format("video device format", format);
   }
@@ -85,7 +85,7 @@ int VideoDevice::set_format(const v4l2_format &format) {
   log_format("video device format", format);
   int rc = ioctl(fd_, VIDIOC_S_FMT, &format);
   if (rc == -1) {
-    ROS_ERROR("ioctl(%d, VIDIOC_S_FMT) failed - errno=%d, %s", fd_, errno,
+    RCLCPP_ERROR(logger_, "ioctl(%d, VIDIOC_S_FMT) failed - errno=%d, %s", fd_, errno,
               strerror(errno));
   } else {
     log_format("set video device format", format);
@@ -96,13 +96,13 @@ int VideoDevice::set_format(const v4l2_format &format) {
 ssize_t VideoDevice::write(const unsigned char *buffer, size_t size) {
   ssize_t written = ::write(fd_, buffer, size);
   if (written != size) {
-    ROS_WARN("write(%d, %zu) == %zu", fd_, size, written);
+    RCLCPP_WARN(logger_, "write(%d, %zu) == %zu", fd_, size, written);
   }
   return written;
 }
 
-void log_format(const char *title, const v4l2_format &format) {
-  ROS_INFO("%s:\n"
+void VideoDevice::log_format(const char *title, const v4l2_format &format) {
+  RCLCPP_INFO(logger_, "%s:\n"
            "  type                 = %d\n"
            "  fmt.pix.width        = %d\n"
            "  fmt.pix.height       = %d\n"

@@ -9,19 +9,14 @@
 #include <linux/videodev2.h>
 #include <string>
 #include <unistd.h>
-
-// TODO(lucasw) namespace image_to_v4l2loopback
-/**
- * Represents a video capture device.
- */
-void log_format(const char *title, const v4l2_format &format);
+#include <rclcpp/rclcpp.hpp>
 
 class VideoDevice {
 public:
   /**
    * \path Path to video capture device like /dev/video1
    */
-  explicit VideoDevice(const std::string &path);
+  explicit VideoDevice(const std::string &path, const rclcpp::Logger &logger);
   VideoDevice(const VideoDevice &other);
   ~VideoDevice();
 
@@ -32,11 +27,17 @@ public:
 
   int get_format(v4l2_format &format);
   int set_format(const v4l2_format &format);
+  // TODO(lucasw) namespace image_to_v4l2loopback
+  /**
+   * Represents a video capture device.
+   */
+  void log_format(const char *title, const v4l2_format &format);
 
   ssize_t write(const unsigned char *buffer, size_t size);
 
 private:
   int fd_;
+  rclcpp::Logger logger_;
 };
 
 #endif  // IMAGE_TO_V4L2LOOPBACK_VIDEO_DEVICE_H

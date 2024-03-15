@@ -13,127 +13,108 @@
 
 #include <image_to_v4l2loopback/image_converter.h>
 #include <image_to_v4l2loopback/video_device.h>
-#include <image_transport/image_transport.h>
-#include <image_transport/subscriber.h>
+#include <image_transport/image_transport.hpp>
+#include <image_transport/subscriber.hpp>
 #include <memory>
-#include <ros/ros.h>
-#include <sensor_msgs/Image.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.h>
 #include <string>
 
-/**
- * Writes converted images from a sensor_msgs::Image to a VideoDevice.
- */
-class ImageStream {
+class ImageStreamNode : public rclcpp::Node {
 public:
-  ImageStream(const std::string &topic, ImageConverter &image_converter, VideoDevice &dev,
-              size_t queue_size):
-    _dev(dev),
-    _image_converter(image_converter),
-    _transport(ros::NodeHandle()),
-    _sub(_transport.subscribe(topic, queue_size, &ImageStream::stream, this))
+  ImageStreamNode() : Node("image_stream_node")
   {
-  }
+    // Declare and get parameters
+    this->declare_parameter<std::string>("topic", "image");
+    std::string topic = this->get_parameter("topic").as_string();
 
-  /// Converts sensor_msgs::Image and writes resulting image data to a
-  /// VideoDevice.
-  void stream(const sensor_msgs::ImageConstPtr &msg) {
-    int rc = _image_converter(msg, _buf);
-    if (rc == -1) {
-      return;
-    }
-    rc = _dev.write(&_buf[0], _buf.size());
-    if (rc == -1) {
-      return;
-    }
-  }
+    this->declare_parameter<int>("width", 640);
+    this->declare_parameter<int>("height", 480);
+    const uint32_t width = this->get_parameter("width").as_int();    
+    const uint32_t height = this->get_parameter("height").as_int();
 
-  void operator()(const sensor_msgs::ImageConstPtr &msg) { stream(msg); }
-
-private:
-  ImageConverter _image_converter;
-
-  ImageConverter::Buffer _buf;
-
-  VideoDevice _dev;
-
-  image_transport::ImageTransport _transport;
-
-  image_transport::Subscriber _sub;
-};
-
-// TODO(lucasw) probably will merge this with ImageStream later,
-// for now convenient to have it be another layer.
-class ImageStreamNode {
-public:
-  ImageStreamNode()
-  {
-    int width_tmp = 640;
-    ros::param::get("~width", width_tmp);
-    int height_tmp = 480;
-    ros::param::get("~height", height_tmp);
-
-    const uint32_t width = width_tmp;
-    const uint32_t height = height_tmp;
 
     // valid options are BGR3, RGB3, GREY, YV12, YUYV
-    std::string format = "YV12";
-    ros::param::get("~format", format);
-    ROS_INFO("converting - width=%u, height=%u, format=%s", width, height,
-             format.c_str());
-    ImageConverter image_converter(width, height, format);
+    this->declare_parameter<std::string>("format", "YV12");
+    std::string format = this->get_parameter("format").as_string();
 
-    std::string video_device = "/dev/video1";
-    ros::param::get("~device", video_device);
+    this->declare_parameter<std::string>("device", "/dev/video1");
+    std::string video_device = this->get_parameter("device").as_string();
 
-    ROS_INFO("opening '%s'", video_device.c_str());
-    VideoDevice dev(video_device);
+    this->declare_parameter<int>("queue_size", 1);
+    int queue_size = this->get_parameter("device").as_int();
 
+    RCLCPP_INFO(this->get_logger(), "Converting - width=%d, height=%d, format=%s", width, height, format.c_str());
+    image_converter_ = std::make_unique<ImageConverter>(width, height, format, this->get_logger());
+
+    RCLCPP_INFO(this->get_logger(), "opening '%s'", video_device.c_str());
+    video_device_ = std::make_unique<VideoDevice>(video_device, this->get_logger());
+
+    /**
+     * Writes converted images from a sensor_msgs::Image to a VideoDevice.
+     */
+    auto callback = [this](const sensor_msgs::msg::Image::ConstSharedPtr msg) -> void {
+      ImageConverter::Buffer buf;
+      int rc = image_converter_->convert(msg, buf);
+      if (rc == -1) {
+        return;
+      }
+
+      rc = video_device_->write(buf.data(), buf.size());
+      if (rc == -1) {
+        return;
+      }
+    };
+
+    // image_transport::ImageTransport it(this->shared_from_this());
+    sub_ = image_transport::create_subscription(this, topic, callback, "raw", rmw_qos_profile_sensor_data);
     int rc;
 
     v4l2_capability capability;
-    rc = dev.capabilities(capability);
+    rc = video_device_->capabilities(capability);
     if (rc == -1) {
       throw std::runtime_error("failed device caps");
     }
-    ROS_INFO("'%s' caps %#08x", video_device.c_str(), capability.capabilities);
+    RCLCPP_INFO(this->get_logger(), "'%s' caps %#08x", video_device.c_str(), capability.capabilities);
 
     v4l2_format fmt;
     memset(&fmt, 0, sizeof(fmt));
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-    rc = dev.get_format(fmt);
+    rc = video_device_->get_format(fmt);
     if (rc == -1) {
       throw std::runtime_error("failed to get device format");
     }
-    log_format("current format: ", fmt);
+    video_device_->log_format("current format: ", fmt);
 
-    ROS_INFO("setting '%s' format", video_device.c_str());
-    fmt = image_converter.format();
-    rc = dev.set_format(fmt);
+    RCLCPP_INFO(this->get_logger(), "setting '%s' format", video_device.c_str());
+    fmt = image_converter_->format();
+    rc = video_device_->set_format(fmt);
     if (rc == -1) {
       throw std::runtime_error("failed device format: " + format);
     }
 
-    ROS_INFO("turn on '%s' streaming", video_device.c_str());
-    rc = dev.stream_on();
+    RCLCPP_INFO(this->get_logger(), "turn on '%s' streaming", video_device.c_str());
+    rc = video_device_->stream_on();
     if (rc == -1) {
       throw std::runtime_error("failed device stream");
     }
-    int queue_size = 1;
-    ros::param::get("~queue_size", queue_size);
-    ROS_INFO("streaming images from '%s' to '%s' w/ queue-size=%u",
-             ros::names::resolve("image", true).c_str(), video_device.c_str(),
+
+    RCLCPP_INFO(this->get_logger(), "streaming images from '%s' to '%s' w/ queue-size=%u",
+             topic.c_str(), video_device.c_str(),
              queue_size);
-    image_stream_ = std::make_unique<ImageStream>("image", image_converter, dev, queue_size);
   }
 
 private:
-  std::unique_ptr<ImageStream> image_stream_;
+  std::unique_ptr<ImageConverter> image_converter_;
+  std::unique_ptr<VideoDevice> video_device_;
+  image_transport::Subscriber sub_;
 };
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "stream", ros::init_options::AnonymousName);
-  ImageStreamNode image_stream_node;
-  ros::spin();
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<ImageStreamNode>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
 
   return 0;
 }

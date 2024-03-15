@@ -8,9 +8,10 @@
 
 #include <linux/videodev2.h>
 #include <opencv2/opencv.hpp>
-#include <sensor_msgs/Image.h>
+#include <sensor_msgs/msg/image.hpp>
 #include <string>
 #include <vector>
+#include <rclcpp/rclcpp.hpp>
 
 /**
  * Resizes and formats an image
@@ -26,19 +27,21 @@ public:
    * \height Target image height in pixels.
    * \fourcc Target image pixel format as a fourcc string.
    */
-  ImageConverter(uint32_t width, uint32_t height, const std::string &fourcc);
+  ImageConverter(uint32_t width, uint32_t height, const std::string &fourcc, const rclcpp::Logger &logger);
 
   // The VideoDevice: to support writing images generated be this conveter.
   v4l2_format format() const;
 
   typedef std::vector<unsigned char> Buffer;
 
-  bool convert(const sensor_msgs::ImageConstPtr &msg, Buffer &buf);
+  bool convert(const sensor_msgs::msg::Image::ConstSharedPtr &msg, Buffer &buf);
 
   // Alias for ImageConverter::convert.
-  bool operator()(const sensor_msgs::ImageConstPtr &msg, Buffer &buf);
+  bool operator()(const sensor_msgs::msg::Image::ConstSharedPtr &msg, Buffer &buf);
 
 private:
+  rclcpp::Logger logger_;
+
   static uint32_t _fourcc_code(const std::string &fourcc);
 
   void param_bgr24();

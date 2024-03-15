@@ -1,28 +1,27 @@
 <?xml version="1.0"?>
-<package>
+<package format="3">
   <name>image_to_v4l2loopback</name>
   <version>0.1.0</version>
-  <description>Publish ros images into a virtual v4l2 video device</description>
+  <description>Publish ROS images into a virtual v4l2 video device</description>
 
   <maintainer email="wsacul@gmail.com">Lucas Walter</maintainer>
   <license>BSD</license>
   <url type="website">https://github.com/lucasw/image_to_v4l2loopback</url>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ament_cmake_auto</depend> <!-- Optional, for simplifying dependency management -->
 
-  <build_depend>cv_bridge</build_depend>
-  <build_depend>image_transport</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>roslint</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <run_depend>cv_bridge</run_depend>
-  <run_depend>image_transport</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>std_msgs</run_depend>
+  <depend>cv_bridge</depend> <!-- Used as <depend> for simplicity, covers build, export, and exec -->
+  <depend>image_transport</depend>
+  <depend>rclcpp</depend> <!-- roscpp is replaced by rclcpp in ROS2 -->
+  <!-- roslint is not a common dependency in ROS2, consider using ament_lint_auto for linting -->
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
 
-  <test_depend>rostest</test_depend>
-
+  <test_depend>ament_lint_auto</test_depend> <!-- Optional, for linting -->
+  <test_depend>ament_lint_common</test_depend> <!-- Optional, common linters -->
+  
   <export>
+    <!-- ROS2 doesn't require an empty export tag, but you might add custom interfaces or plugins here -->
   </export>
 </package>

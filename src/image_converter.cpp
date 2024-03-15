@@ -4,10 +4,10 @@
  */
 
 #include <algorithm>
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 #include <image_to_v4l2loopback/image_converter.h>
-#include <ros/ros.h>
-#include <sensor_msgs/image_encodings.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/image_encodings.hpp>
 #include <string.h>
 #include <string>
 #include <utility>  // TODO(lucasw) roslint want this for cv::swap
@@ -25,10 +25,11 @@ bool ImageConverter::is_supported(const std::string &fourcc) {
 }
 
 ImageConverter::ImageConverter(uint32_t width, uint32_t height,
-                               const std::string &fourcc) :
+                               const std::string &fourcc, const rclcpp::Logger &logger) :
   width_(width),
   height_(height),
-  fourcc_(_fourcc_code(fourcc))
+  fourcc_(_fourcc_code(fourcc)),
+  logger_(logger)
 {
   switch (fourcc_) {
   case V4L2_PIX_FMT_BGR24:
@@ -66,14 +67,14 @@ v4l2_format ImageConverter::format() const {
   return format;
 }
 
-bool ImageConverter::convert(const sensor_msgs::ImageConstPtr &msg,
+bool ImageConverter::convert(const sensor_msgs::msg::Image::ConstSharedPtr &msg,
                              ImageConverter::Buffer &buffer) {
   // TODO(lucasw) it would be nice to avoid the resize if possible,
   // crop if necessary
   // as opencv
   cv_bridge::CvImagePtr cv_msg = cv_bridge::toCvCopy(msg, cv_copy_encoding_);
   if (cv_msg == NULL) {
-    ROS_INFO("failed to copy sensor image '%s' to cv image '%s'",
+    RCLCPP_INFO(logger_, "failed to copy sensor image '%s' to cv image '%s'",
              msg->encoding.c_str(), cv_copy_encoding_.c_str());
     return false;
   }
@@ -101,7 +102,7 @@ bool ImageConverter::convert(const sensor_msgs::ImageConstPtr &msg,
   return true;
 }
 
-bool ImageConverter::operator()(const sensor_msgs::ImageConstPtr &msg,
+bool ImageConverter::operator()(const sensor_msgs::msg::Image::ConstSharedPtr &msg,
                                 ImageConverter::Buffer &buffer) {
   return convert(msg, buffer);
 }
@@ -119,7 +120,7 @@ uint32_t ImageConverter::_fourcc_code(const std::string &fourcc) {
 }
 
 void ImageConverter::param_bgr24() {
-  ROS_INFO_STREAM("bgr24");
+  RCLCPP_INFO(logger_, "bgr24");
   cv_copy_encoding_ = sensor_msgs::image_encodings::BGR8;
   cv_color_ = false;
   bytes_per_line_ = 0;
@@ -141,7 +142,7 @@ void ImageConverter::fmt_bgr24(const cv::Mat &image, Buffer &buf) {
 }
 
 void ImageConverter::param_rgb24() {
-  ROS_INFO_STREAM("rgb24");
+  RCLCPP_INFO(logger_, "rgb24");
   cv_copy_encoding_ = sensor_msgs::image_encodings::BGR8;
   cv_copy_encoding_ = sensor_msgs::image_encodings::RGB8;
   cv_color_ = false;
@@ -164,7 +165,7 @@ void ImageConverter::fmt_rgb24(const cv::Mat &image, Buffer &buf) {
 }
 
 void ImageConverter::param_grey() {
-  ROS_INFO_STREAM("grey");
+  RCLCPP_INFO(logger_, "grey");
   cv_copy_encoding_ = sensor_msgs::image_encodings::MONO8;
   cv_color_ = false;
   bytes_per_line_ = 0;
@@ -182,7 +183,7 @@ void ImageConverter::fmt_grey(const cv::Mat &image, Buffer &buf) {
 }
 
 void ImageConverter::param_yvu420() {
-  ROS_INFO_STREAM("yvu420");
+  RCLCPP_INFO(logger_, "yvu420");
   cv_copy_encoding_ = sensor_msgs::image_encodings::BGR8;
   cv_color_ = true;
   cv_color_code_ = CV_BGR2YCrCb;
@@ -215,7 +216,7 @@ void ImageConverter::fmt_yvu420(const cv::Mat &image, Buffer &buf) {
 }
 
 void ImageConverter::param_yuyv() {
-  ROS_INFO_STREAM("yuyv");
+  RCLCPP_INFO(logger_, "yuyv");
   cv_copy_encoding_ = sensor_msgs::image_encodings::BGR8;
   cv_color_ = true;
   cv_color_code_ = CV_BGR2YCrCb;
