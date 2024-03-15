@@ -42,7 +42,7 @@ public:
     std::string video_device = this->get_parameter("device").as_string();
 
     this->declare_parameter<int>("queue_size", 1);
-    int queue_size = this->get_parameter("device").as_int();
+    int queue_size = this->get_parameter("queue_size").as_int();
 
     RCLCPP_INFO(this->get_logger(), "Converting - width=%d, height=%d, format=%s", width, height, format.c_str());
     image_converter_ = std::make_unique<ImageConverter>(width, height, format, this->get_logger());
